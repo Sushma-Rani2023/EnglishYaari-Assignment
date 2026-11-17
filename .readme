@@ -1,0 +1,345 @@
+# Teacher Session Booking API
+
+A RESTful backend application built using Node.js, TypeScript, Express.js, MongoDB, and Mongoose. This application allows users to register, view available teacher sessions, book sessions, and track their completed session history.
+
+## Tech Stack
+
+- **Node.js** – JavaScript runtime environment
+- **TypeScript** – Type-safe development
+- **Express.js** – REST API framework
+- **MongoDB** – NoSQL database
+- **Mongoose** – MongoDB object modeling
+- **ES Modules** – Import/Export syntax
+
+## Features
+
+- Create and manage users.
+- Create and manage teachers.
+- Create available sessions for teachers.
+- Fetch available sessions for a specific date using MongoDB Aggregation Pipeline.
+- Book available sessions.
+- Prevent multiple users from booking the same session using atomic database updates.
+- Mark booked sessions as completed.
+- Retrieve user session history, separated into upcoming and completed sessions using MongoDB Aggregation Pipeline.
+- Centralized error handling.
+- Input validation and appropriate HTTP status codes.
+
+## Project Structure
+
+```text
+teacher-booking-api/
+│
+├── src/
+│   ├── config/
+│   │   └── db.ts
+│   │
+│   ├── models/
+│   │   ├── User.ts
+│   │   ├── Teacher.ts
+│   │   └── Session.ts
+│   │
+│   ├── controllers/
+│   │   ├── userController.ts
+│   │   ├── teacherController.ts
+│   │   └── sessionController.ts
+│   │
+│   ├── routes/
+│   │   ├── userRoutes.ts
+│   │   ├── teacherRoutes.ts
+│   │   └── sessionRoutes.ts
+│   │
+│   ├── middleware/
+│   │   └── errorHandler.ts
+│   │
+│   ├── utils/
+│   │   └── AppError.ts
+│   │
+│   └── index.ts
+│
+├── .env
+├── .gitignore
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## Installation and Setup
+
+### 1. Clone the repository
+
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd teacher-booking-api
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure environment variables
+
+Create a `.env` file in the root directory.
+
+```env
+PORT=5000
+MONGO_URI=mongodb://127.0.0.1:27017/teacher_booking
+```
+
+Make sure MongoDB is running locally, or provide your MongoDB Atlas connection string.
+
+### 4. Run the application
+
+**Development mode:**
+
+```bash
+npm run dev
+```
+
+**Build TypeScript:**
+
+```bash
+npm run build
+```
+
+**Production mode:**
+
+```bash
+npm start
+```
+
+The application will run at:
+
+```text
+http://localhost:5000
+```
+
+## API Documentation
+
+Base URL: `http://localhost:5000`
+
+### 1. Create User
+
+**Endpoint:** `POST /users`
+
+Creates a new user. Email must be unique.
+
+**Request Body:**
+
+```json
+{
+  "fullName": "Sushma Rani",
+  "email": "sushma@gmail.com",
+  "phone": "9876543210"
+}
+```
+
+**Success Response:** `201 Created`
+
+### 2. Create Teacher
+
+**Endpoint:** `POST /teachers`
+
+Creates a new teacher. This is an additional endpoint provided for teacher registration and testing.
+
+**Request Body:**
+
+```json
+{
+  "fullName": "Rahul Sharma",
+  "email": "rahul@gmail.com",
+  "specialization": "Node.js",
+  "experience": 5
+}
+```
+
+**Success Response:** `201 Created`
+
+### 3. Create Session
+
+**Endpoint:** `POST /sessions`
+
+Creates a new session for an existing teacher. The default status is `AVAILABLE`.
+
+**Request Body:**
+
+```json
+{
+  "teacherId": "TEACHER_OBJECT_ID",
+  "startTime": "2026-11-20T10:00:00.000Z",
+  "endTime": "2026-11-20T11:00:00.000Z"
+}
+```
+
+**Success Response:** `201 Created`
+
+### 4. Get Available Sessions
+
+**Endpoint:** `GET /sessions/available?dateTimestamp={timestamp}`
+
+Fetches all available sessions for the specified UTC calendar date.
+
+**Example:**
+
+```text
+GET /sessions/available?dateTimestamp=1795161600000
+```
+
+**Implementation:**
+
+Uses MongoDB Aggregation Pipeline with:
+
+- `$match` – Filters available sessions by date.
+- `$lookup` – Joins teacher details.
+- `$unwind` – Converts teacher array into an object.
+- `$project` – Selects required fields.
+- `$sort` – Sorts sessions by start time.
+
+**Success Response:** `200 OK`
+
+### 5. Book Session
+
+**Endpoint:** `POST /sessions/:id/book`
+
+Books an available session for an existing user.
+
+**Request Body:**
+
+```json
+{
+  "userId": "USER_OBJECT_ID"
+}
+```
+
+**Success Response:** `200 OK`
+
+**Business Rules:**
+
+- User must exist.
+- Session must exist.
+- Only AVAILABLE sessions can be booked.
+- A session cannot be booked more than once.
+- Session status changes to `BOOKED`.
+- User ID is associated with the session.
+
+**Concurrency Handling:**
+
+Uses Mongoose `findOneAndUpdate()` with a conditional status filter to ensure atomic booking and prevent multiple users from booking the same session.
+
+### 6. Complete Session
+
+**Endpoint:** `PATCH /sessions/:id/complete`
+
+Marks a booked session as completed.
+
+**Request Body:** Not required.
+
+**Success Response:** `200 OK`
+
+**Business Rules:**
+
+- Session must exist.
+- Only BOOKED sessions can be completed.
+- Status changes to `COMPLETED`.
+- `completedAt` is updated with the current timestamp.
+
+### 7. Get User Session History
+
+**Endpoint:** `GET /users/:id/sessions`
+
+Fetches sessions associated with a user, separated into upcoming and completed sessions.
+
+**Success Response:** `200 OK`
+
+**Response Structure:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "upcomingSessions": [],
+    "completedSessions": []
+  }
+}
+```
+
+**Implementation:**
+
+Uses MongoDB Aggregation Pipeline with:
+
+- `$match` – Filters sessions by user ID.
+- `$facet` – Separates sessions into two independent pipelines.
+- `$lookup` – Fetches teacher details.
+- `$unwind` – Flattens teacher information.
+- `$sort` – Sorts upcoming and completed sessions.
+
+Upcoming sessions are BOOKED sessions whose start time is in the future. Completed sessions are those with COMPLETED status.
+
+## Session Status
+
+| Status | Description |
+|---|---|
+| AVAILABLE | Session is available for booking. |
+| BOOKED | Session has been booked by a user. |
+| COMPLETED | Session has been completed. |
+
+## HTTP Status Codes
+
+| Status Code | Description |
+|---|---|
+| 200 | Request successful |
+| 201 | Resource created successfully |
+| 400 | Invalid request or input |
+| 404 | Resource not found |
+| 409 | Duplicate email or booking conflict |
+| 500 | Internal server error |
+
+## Testing
+
+APIs can be tested using Postman.
+
+For requests requiring a body:
+
+1. Select the appropriate HTTP method.
+2. Open the Body tab.
+3. Select `raw`.
+4. Choose `JSON` from the dropdown.
+5. Enter the request payload.
+
+### Recommended Testing Sequence
+
+1. Create a teacher.
+2. Create a user.
+3. Create a session using the teacher ID.
+4. Fetch available sessions for the session date.
+5. Book the session using the user ID.
+6. Try booking the same session again to verify duplicate booking prevention.
+7. Mark the session as completed.
+8. Fetch the user's session history.
+
+## Error Handling
+
+The application uses centralized error-handling middleware to manage:
+
+- Validation errors.
+- Duplicate email errors.
+- Invalid ObjectIds.
+- Resource not found errors.
+- Booking conflicts.
+- Unexpected server errors.
+
+## Future Improvements
+
+- JWT-based authentication and authorization.
+- Role-based access for teachers and users.
+- Prevention of overlapping teacher sessions.
+- Automated test cases using Jest or Vitest.
+- Pagination for session listings.
+- API documentation using Swagger.
+
+## Author
+
+**Sushma Rani**
+
+Built as a backend development assignment using Node.js, TypeScript, Express.js, MongoDB, and Mongoose.
